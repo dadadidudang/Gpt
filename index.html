@@ -1,0 +1,145 @@
+
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>꿈빛파티시엘노트</title>
+  <meta name="theme-color" content="#ff6fa5">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>🍰 꿈빛파티시엘노트</h1>
+    <div class="actions">
+      <button id="newRecipeBtn">+ 새 레시피</button>
+      <button id="exportBtn">내보내기(JSON)</button>
+      <label class="importLabel">
+        불러오기(JSON)
+        <input type="file" id="importInput" accept="application/json">
+      </label>
+    </div>
+  </header>
+
+  <section id="filters">
+    <input type="search" id="searchInput" placeholder="검색: 제목, 재료, 태그">
+    <select id="sortSelect" aria-label="정렬">
+      <option value="updatedDesc">최근 수정순</option>
+      <option value="titleAsc">제목 A→Z</option>
+      <option value="timeAsc">소요시간 짧은순</option>
+      <option value="timeDesc">소요시간 긴순</option>
+    </select>
+    <div id="tagChips" class="chips"></div>
+  </section>
+
+  <main>
+    <ul id="recipeList" class="cards"></ul>
+  </main>
+
+  <dialog id="recipeDialog">
+    <form method="dialog" id="recipeForm">
+      <h2 id="dialogTitle">새 레시피</h2>
+
+      <div class="grid">
+        <label>제목*<input name="title" required maxlength="100" placeholder="예: 말차 오페라"></label>
+        <label>난이도
+          <select name="difficulty">
+            <option value="">선택 없음</option>
+            <option>초급</option>
+            <option>중급</option>
+            <option>고급</option>
+          </select>
+        </label>
+        <label>소요시간(분)
+          <input name="time" type="number" min="0" step="1" placeholder="예: 90">
+        </label>
+        <label>분량(인분/개수)
+          <input name="yield" maxlength="40" placeholder="예: 8인분">
+        </label>
+        <label>태그(쉼표로 구분)
+          <input name="tags" maxlength="120" placeholder="예: 프랑스, 구움과자, 한식요소">
+        </label>
+        <label>표지 이미지 URL
+          <input name="image" placeholder="https:// ... (선택)">
+        </label>
+      </div>
+
+      <label>한 줄 소개
+        <input name="summary" maxlength="160" placeholder="예: 말차-화이트초콜릿 조합의 진한 레이어 케이크">
+      </label>
+
+      <label>재료(한 줄당 하나)
+        <textarea name="ingredients" rows="8" placeholder="버터 100g
+설탕 80g
+달걀 2개
+..."></textarea>
+      </label>
+
+      <label>만드는 법(단계별로)
+        <textarea name="steps" rows="10" placeholder="1) 오븐 170°C 예열
+2) 버터와 설탕을 휘핑...
+..."></textarea>
+      </label>
+
+      <label>비고/메모
+        <textarea name="notes" rows="6" placeholder="팁, 대체 재료, 실패 노트 등"></textarea>
+      </label>
+
+      <menu>
+        <button value="cancel" id="cancelBtn">취소</button>
+        <button id="saveBtn" value="default">저장</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <template id="recipeCardTmpl">
+    <li class="card">
+      <div class="thumb"></div>
+      <div class="content">
+        <h3 class="title"></h3>
+        <p class="summary"></p>
+        <div class="meta">
+          <span class="badge time"></span>
+          <span class="badge diff"></span>
+          <span class="badge yield"></span>
+        </div>
+        <div class="tags"></div>
+        <details>
+          <summary>레시피 펼치기</summary>
+          <div class="two-col">
+            <div>
+              <h4>재료</h4>
+              <ul class="ing"></ul>
+            </div>
+            <div>
+              <h4>만드는 법</h4>
+              <ol class="steps"></ol>
+            </div>
+          </div>
+          <div class="notes"></div>
+        </details>
+        <div class="row">
+          <button class="edit">수정</button>
+          <button class="delete">삭제</button>
+          <button class="dup">복제</button>
+        </div>
+      </div>
+    </li>
+  </template>
+
+  <footer>
+    <small>저장 위치: 이 브라우저의 localStorage · 데이터는 내 기기에서만 보입니다 · JSON으로 백업하세요</small>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js");
+      });
+    }
+  </script>
+</body>
+</html>
