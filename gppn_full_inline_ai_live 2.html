@@ -1,0 +1,405 @@
+
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>꿈빛파티시엘노트 · 단일 파일 (iOS 내보내기 + 실시간 AI)</title>
+<meta name="theme-color" content="#ff6fa5">
+<style>
+:root{--bg:#fffafc;--ink:#1f1a21;--muted:#6b6570;--accent:#ff6fa5;--border:#eadbe3;--card:#fff;--chip:#ffe3ee}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;font-size:15.5px}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--border);padding:10px 14px;display:grid;gap:8px}
+h1{margin:0;font-size:1.28rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+button,.importLabel{background:var(--accent);color:#fff;border:0;padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:700;font-size:.92rem;text-align:center}
+.importLabel{position:relative;display:inline-flex;justify-content:center;align-items:center;overflow:hidden}
+#importInput{position:absolute;inset:0;opacity:0;cursor:pointer}
+#filters{display:grid;gap:8px;grid-template-columns:1fr auto;padding:10px 14px;align-items:center}
+#searchInput,#sortSelect{padding:8px 10px;border:1px solid var(--border);border-radius:10px;font-size:.94rem}
+.chips{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+.chips button{background:var(--chip);color:#7a2a48;border:1px solid var(--border);padding:6px 10px;border-radius:999px;cursor:pointer;font-size:.9rem}
+.cards{list-style:none;padding:12px;margin:0;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{display:grid;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.card .thumb{background:#f7eef2;min-height:120px;background-size:cover;background-position:center}
+.card .content{padding:12px;display:grid;gap:6px}
+.card .title{margin:0;font-size:1.05rem;font-weight:700}
+.summary{color:var(--muted);margin:0;min-height:1.1em;font-size:.95rem}
+.meta{display:flex;gap:6px;flex-wrap:wrap}
+.badge{background:#f8edf2;border:1px solid var(--border);padding:3px 8px;border-radius:999px;font-size:.88rem}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tags .tag{background:var(--chip);border-radius:999px;padding:2px 7px;border:1px solid var(--border);font-size:.85rem}
+.two-col{display:grid;gap:10px;grid-template-columns:1fr}
+@media(min-width:720px){.two-col{grid-template-columns:1fr 1fr}}
+.card .row{display:flex;gap:8px}
+.card .row button{background:#f1e0e7;color:#7a2a48;border:1px solid var(--border);font-size:.9rem}
+dialog::backdrop{background:rgba(0,0,0,.4)}dialog{width:min(960px,96vw);border:1px solid var(--border);border-radius:16px;padding:0}
+#recipeForm{padding:16px;display:grid;gap:10px}#recipeForm .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}#recipeForm label{display:grid;gap:6px}
+textarea,input,select{border:1px solid var(--border);border-radius:10px;padding:10px;width:100%;font-size:.95rem}
+menu{display:flex;gap:8px;justify-content:flex-end;margin:0;padding:0}
+footer{text-align:center;color:var(--muted);padding:16px}.empty{padding:40px;text-align:center;color:var(--muted)}
+#aiFab{position:fixed;right:14px;bottom:20px;z-index:20;background:var(--accent);color:#fff;border:0;padding:12px 14px;border-radius:999px;font-weight:800;box-shadow:0 6px 20px rgba(255,111,165,.35)}
+.ai-result{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px;white-space:pre-wrap}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:.9rem;opacity:0;transition:.3s;z-index:50}
+.toast.show{opacity:1}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>꿈빛파티시엘노트</h1>
+  <div class="actions">
+    <button id="newRecipeBtn">+ 새 레시피</button>
+    <button id="exportBtn">내보내기</button>
+    <label class="importLabel">불러오기<input type="file" id="importInput" accept="application/json"></label>
+  </div>
+</header>
+
+<section id="filters">
+  <input type="search" id="searchInput" placeholder="검색: 제목, 재료, 태그">
+  <select id="sortSelect" aria-label="정렬">
+    <option value="updatedDesc">최근 수정순</option>
+    <option value="titleAsc">제목 A→Z</option>
+    <option value="timeAsc">소요시간 짧은순</option>
+    <option value="timeDesc">소요시간 긴순</option>
+  </select>
+  <div id="tagChips" class="chips"></div>
+</section>
+
+<main>
+  <ul id="recipeList" class="cards"></ul>
+  <button id="aiFab" title="AI 도우미">AI</button>
+</main>
+
+<dialog id="recipeDialog">
+  <form method="dialog" id="recipeForm">
+    <h2 id="dialogTitle">새 레시피</h2>
+    <div class="grid">
+      <label>제목*<input name="title" required maxlength="100" placeholder="예: 말차 오페라"></label>
+      <label>난이도
+        <select name="difficulty"><option value="">선택 없음</option><option>초급</option><option>중급</option><option>고급</option></select></label>
+      <label>소요시간(분)<input name="time" type="number" min="0" step="1" placeholder="예: 90"></label>
+      <label>분량(인분/개수)<input name="yield" maxlength="40" placeholder="예: 8인분"></label>
+      <label>태그(쉼표로 구분)<input name="tags" maxlength="120" placeholder="예: 프랑스, 푸딩"></label>
+      <label>표지 이미지 URL<input name="image" placeholder="https:// ... (선택)"></label>
+    </div>
+    <label>한 줄 소개<input name="summary" maxlength="160" placeholder="예: 바닐라 향이 포인트인 기본 푸딩"></label>
+    <label>재료(한 줄당 하나)
+      <textarea name="ingredients" rows="8" placeholder="우유 500ml
+생크림 200ml
+설탕 70g
+달걀 3개
+바닐라 빈 1/2개
+소금 한 꼬집"></textarea></label>
+    <label>만드는 법(단계별로)
+      <textarea name="steps" rows="10" placeholder="1) 오븐 150°C 예열
+2) 우유+크림을 데워 향 우려내기
+3) 달걀+설탕 섞기
+4) 따뜻한 우유 혼합물 조금씩 넣어 섞기
+5) 체에 걸러 중탕으로 30분 굽기"></textarea></label>
+    <label>비고/메모
+      <textarea name="notes" rows="6" placeholder="팁, 대체 재료, 실패 노트 등"></textarea></label>
+    <menu><button value="cancel" id="cancelBtn">취소</button><button id="saveBtn" value="default">저장</button></menu>
+  </form>
+</dialog>
+
+<template id="recipeCardTmpl">
+  <li class="card">
+    <div class="thumb"></div>
+    <div class="content">
+      <h3 class="title"></h3>
+      <p class="summary"></p>
+      <div class="meta"><span class="badge time"></span><span class="badge diff"></span><span class="badge yield"></span></div>
+      <div class="tags"></div>
+      <details>
+        <summary>레시피 펼치기</summary>
+        <div class="two-col">
+          <div><h4>재료</h4><ul class="ing"></ul></div>
+          <div><h4>만드는 법</h4><ol class="steps"></ol></div>
+        </div>
+        <div class="notes"></div>
+      </details>
+      <div class="row"><button class="edit">수정</button><button class="delete">삭제</button><button class="dup">복제</button></div>
+    </div>
+  </li>
+</template>
+
+<footer><small>저장 위치: 이 기기 브라우저(localStorage) · JSON으로 백업하세요</small></footer>
+
+<dialog id="aiDialog">
+  <form method="dialog" id="aiForm">
+    <h2>AI 도우미 <small class="muted">(키를 넣으면 실제 응답)</small></h2>
+    <p class="muted">재료로 레시피 추천, 단계 요약, 단위 변환 등을 물어보세요.</p>
+    <textarea id="aiInput" rows="4" placeholder="예: 달걀·우유·말차로 디저트 추천"></textarea>
+    <menu><button value="cancel">닫기</button><button id="aiAskBtn" value="default">질문 보내기</button></menu>
+    <div id="aiResult" class="ai-result"></div>
+    <hr>
+    <details>
+      <summary>설정: OpenAI API 키 연결</summary>
+      <label>OpenAI API Key
+        <input type="password" id="apiKeyInput" placeholder="sk-..." style="width:100%">
+      </label>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button type="button" id="saveKeyBtn">키 저장</button>
+        <button type="button" id="clearKeyBtn" style="background:#bbb">키 삭제</button>
+      </div>
+      <p class="muted" id="keyStatus"></p>
+    </details>
+  </form>
+</dialog>
+
+<div id="toast" class="toast">복사 완료</div>
+
+<script>
+(()=>{
+  const el=s=>document.querySelector(s);
+  const storageKey='gppn.single.recipes.v3';
+  let state={recipes:load(),search:'',tagFilter:'',sort:'updatedDesc'};
+
+  const list=el('#recipeList'), searchInput=el('#searchInput'), sortSelect=el('#sortSelect'),
+        tagChips=el('#tagChips'), dialog=el('#recipeDialog'), form=el('#recipeForm'),
+        newBtn=el('#newRecipeBtn'), exportBtn=el('#exportBtn'), importInput=el('#importInput'),
+        dialogTitle=el('#dialogTitle'), aiDialog=el('#aiDialog'), aiFab=el('#aiFab'),
+        aiInput=el('#aiInput'), aiResult=el('#aiResult'), aiAskBtn=el('#aiAskBtn'),
+        apiKeyInput=el('#apiKeyInput'), saveKeyBtn=el('#saveKeyBtn'), clearKeyBtn=el('#clearKeyBtn'),
+        keyStatus=el('#keyStatus');
+
+  // UI events
+  newBtn.addEventListener('click',()=>openForm());
+  exportBtn.addEventListener('click',exportJSON);
+  importInput.addEventListener('change',importJSON);
+  searchInput.addEventListener('input',e=>{state.search=e.target.value.trim();render();});
+  sortSelect.addEventListener('change',e=>{state.sort=e.target.value;render();});
+  el('#cancelBtn').addEventListener('click',()=>{ if(dialog.close) dialog.close(); else dialog.removeAttribute('open'); });
+
+  aiFab.addEventListener('click',()=>{
+    (aiDialog.showModal?aiDialog.showModal():aiDialog.setAttribute('open',''));
+    const saved = localStorage.getItem('gppn.apiKey') || '';
+    apiKeyInput.value = saved;
+    keyStatus.textContent = saved ? '🔐 키가 저장되어 있어요. 실제 응답을 받을 수 있어요.' : '🧪 키가 없어서 데모 응답만 나와요.';
+  });
+
+  saveKeyBtn?.addEventListener('click',()=>{
+    const v=apiKeyInput.value.trim();
+    if(!v){ alert('키를 입력해주세요 (sk-로 시작)'); return; }
+    localStorage.setItem('gppn.apiKey', v);
+    keyStatus.textContent='🔐 저장 완료. 이제 실제 응답이 나옵니다.';
+    alert('API 키 저장 완료!');
+  });
+  clearKeyBtn?.addEventListener('click',()=>{
+    localStorage.removeItem('gppn.apiKey'); apiKeyInput.value=''; keyStatus.textContent='🧪 키 삭제됨. 데모 응답으로 전환.';
+  });
+
+  aiAskBtn?.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    const q = (aiInput?.value || '').trim(); if(!q) return;
+    const key = localStorage.getItem('gppn.apiKey');
+    aiResult.textContent = key ? '생각 중…' : '🧪 데모 응답(키 미설정). 설정에서 API 키를 넣으면 실제 호출로 바꿀 수 있어요.\n\n' + demoAI();
+    if(!key) return;
+
+    // 실제 OpenAI API 호출 (chat.completions)
+    try{
+      const model = 'gpt-4o-mini';
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {role:'system', content:'너는 디저트/베이킹 레시피를 잘 도와주는 조리 보조 셰프야. 한국어로 간단명료하게 답해줘.'},
+            {role:'user', content: q}
+          ],
+          temperature: 0.7
+        })
+      });
+      if(!r.ok){
+        const txt = await r.text();
+        aiResult.textContent = '❌ 호출 실패: ' + r.status + ' ' + txt.slice(0,200);
+        return;
+      }
+      const data = await r.json();
+      const msg = data.choices?.[0]?.message?.content || '(응답 없음)';
+      aiResult.textContent = msg;
+    }catch(err){
+      aiResult.textContent = '❌ 네트워크 오류: ' + (err?.message || err);
+    }
+  });
+
+  function demoAI(){
+    return [
+      "• 재료 분석: '말차, 우유, 달걀' → 말차 푸딩/말차 크림브륄레 추천",
+      "• 단위 변환: 설탕 3 Tbsp ≈ 37~40 g",
+      "• 시간 스케줄: 굽기 20분 + 휴지 10분 → 총 30분",
+      "• 대체 재료: 버터→식물성 마가린(풍미↓), 우유→두유(수분 조절 필요)"
+    ].join("\n");
+  }
+
+  form.addEventListener('submit',e=>{
+    e.preventDefault();
+    const data=formToRecipe(new FormData(form));
+    if(!data.title)return;
+    if(form.dataset.editId){
+      const idx=state.recipes.findIndex(r=>r.id===form.dataset.editId);
+      if(idx!==-1){data.id=state.recipes[idx].id;data.createdAt=state.recipes[idx].createdAt;data.updatedAt=Date.now();state.recipes[idx]=data;}
+    }else{
+      data.id=crypto.randomUUID();data.createdAt=Date.now();data.updatedAt=Date.now();state.recipes.unshift(data);
+    }
+    save(); if(dialog.close) dialog.close(); render();
+  });
+
+  function formToRecipe(fd){
+    const get=n=>(fd.get(n)||'').toString().trim();
+    const parseLines=v=>get(v).split(/\r?\n/).map(s=>s.replace(/^\d+\)\s*/,'').trim()).filter(Boolean);
+    const parseTags=v=>get(v).split(',').map(s=>s.trim()).filter(Boolean);
+    return { title:get('title'), difficulty:get('difficulty'), time:get('time')?Number(get('time')):null,
+      yield:get('yield'), tags:parseTags('tags'), image:get('image'), summary:get('summary'),
+      ingredients:parseLines('ingredients'), steps:parseLines('steps'), notes:get('notes') };
+  }
+
+  function load(){
+    try{ const raw=localStorage.getItem(storageKey); if(!raw) return demo();
+      const data=JSON.parse(raw); return Array.isArray(data)?data:demo(); }catch{ return demo(); }
+  }
+  function save(){ localStorage.setItem(storageKey, JSON.stringify(state.recipes)); updateTags(); }
+
+  function exportJSON(){
+    const data = JSON.stringify(state.recipes, null, 2);
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/.test(ua);
+    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    const isWebView = isIOS && !isSafari;
+
+    if(isWebView && navigator.clipboard){
+      navigator.clipboard.writeText(data).then(()=> showToast('복사 완료! 메모/파일에 붙여넣으세요.') );
+      return;
+    }
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'dessert-recipes.json'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJSON(e){
+    const file = e.target.files?.[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const arr = JSON.parse(reader.result);
+        if(!Array.isArray(arr)) throw 0;
+        const map = new Map(state.recipes.map(r=>[r.id,r]));
+        for(const r of arr){
+          if(r.id && map.has(r.id)) continue;
+          r.id = r.id || crypto.randomUUID();
+          r.createdAt = r.createdAt || Date.now();
+          r.updatedAt = Date.now();
+          state.recipes.push(r);
+        }
+        save(); render();
+      }catch{ alert('불러오기에 실패했어요. JSON 형식을 확인해주세요.'); }
+    };
+    reader.readAsText(file); e.target.value='';
+  }
+
+  function render(){
+    const q = state.search.toLowerCase();
+    const filtered = state.recipes.filter(r=>{
+      const hay=[r.title,r.summary,(r.ingredients||[]).join(' '),(r.tags||[]).join(' ')].join(' ').toLowerCase();
+      const matchQ = !q || hay.includes(q);
+      const matchTag = !state.tagFilter || (r.tags||[]).includes(state.tagFilter);
+      return matchQ && matchTag;
+    }).sort((a,b)=>{
+      switch(state.sort){
+        case 'titleAsc': return (a.title||'').localeCompare(b.title||'');
+        case 'timeAsc': return (a.time||1e12)-(b.time||1e12);
+        case 'timeDesc': return (b.time||-1)-(a.time||-1);
+        default: return (b.updatedAt||0)-(a.updatedAt||0);
+      }
+    });
+
+    const main=document.querySelector('main');
+    main.querySelector('#recipeList')?.remove();
+    const ul=document.createElement('ul'); ul.id='recipeList'; ul.className='cards';
+    main.insertBefore(ul, document.getElementById('aiFab'));
+
+    if(!filtered.length){
+      const div=document.createElement('div'); div.className='empty'; div.textContent='레시피가 없어요. 위에서 새 레시피를 추가해보세요!';
+      main.insertBefore(div, document.getElementById('aiFab')); return;
+    }
+    for(const r of filtered) ul.appendChild(card(r));
+  }
+
+  function card(r){
+    const tpl=document.querySelector('#recipeCardTmpl').content.cloneNode(true);
+    const li=tpl.querySelector('.card');
+    const thumb=tpl.querySelector('.thumb');
+    const title=tpl.querySelector('.title');
+    const summary=tpl.querySelector('.summary');
+    const time=tpl.querySelector('.time');
+    const diff=tpl.querySelector('.diff');
+    const yd=tpl.querySelector('.yield');
+    const tags=tpl.querySelector('.tags');
+    const ing=tpl.querySelector('.ing');
+    const steps=tpl.querySelector('.steps');
+    const notes=tpl.querySelector('.notes');
+    const editBtn=tpl.querySelector('.edit');
+    const delBtn=tpl.querySelector('.delete');
+    const dupBtn=tpl.querySelector('.dup');
+
+    title.textContent=r.title||'(제목 없음)';
+    summary.textContent=r.summary||'';
+    time.textContent=r.time?`⏱ ${r.time}분`:'⏱ 시간 미입력';
+    diff.textContent=r.difficulty?`🧁 ${r.difficulty}`:'🧁 난이도 미입력';
+    yd.textContent=r.yield?`🍽 ${r.yield}`:'';
+    if(r.image) thumb.style.backgroundImage=`url('${r.image}')`;
+
+    (r.tags||[]).forEach(t=>{ const s=document.createElement('span'); s.className='tag'; s.textContent=`#${t}`;
+      s.addEventListener('click',()=>{state.tagFilter=t; updateTags(); render();}); tags.appendChild(s); });
+    (r.ingredients||[]).forEach(i=>{ const li=document.createElement('li'); li.textContent=i; ing.appendChild(li); });
+    (r.steps||[]).forEach(s=>{ const li=document.createElement('li'); li.textContent=s; steps.appendChild(li); });
+    notes.textContent=r.notes||'';
+
+    editBtn.addEventListener('click',()=>openForm(r));
+    delBtn.addEventListener('click',()=>{ if(confirm('이 레시피를 삭제할까요?')){ state.recipes=state.recipes.filter(x=>x.id!==r.id); save(); render(); } });
+    dupBtn.addEventListener('click',()=>{ const copy=JSON.parse(JSON.stringify(r)); copy.id=crypto.randomUUID(); copy.title=r.title+' (복제)'; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); state.recipes.unshift(copy); save(); render(); });
+
+    return li;
+  }
+
+  function updateTags(){
+    const all=new Set(); for(const r of state.recipes) (r.tags||[]).forEach(t=>all.add(t));
+    tagChips.innerHTML='';
+    if(state.tagFilter){
+      const clear=document.createElement('button'); clear.textContent=`태그 해제: #${state.tagFilter}`;
+      clear.addEventListener('click',()=>{ state.tagFilter=''; render(); updateTags(); }); tagChips.appendChild(clear);
+    }
+    for(const t of Array.from(all).sort((a,b)=>a.localeCompare(b))){
+      const b=document.createElement('button'); b.textContent=`#${t}`; b.addEventListener('click',()=>{ state.tagFilter=t; render(); updateTags(); }); tagChips.appendChild(b);
+    }
+  }
+
+  function openForm(r=null){
+    form.reset(); delete form.dataset.editId; el('#dialogTitle').textContent='새 레시피';
+    if(r){ el('#dialogTitle').textContent='레시피 수정'; form.title.value=r.title||''; form.difficulty.value=r.difficulty||'';
+      form.time.value=r.time||''; form.yield.value=r.yield||''; form.tags.value=(r.tags||[]).join(', ');
+      form.image.value=r.image||''; form.summary.value=r.summary||''; form.ingredients.value=(r.ingredients||[]).join('\n');
+      form.steps.value=(r.steps||[]).map((s,i)=>`${i+1}) ${s}`).join('\n'); form.notes.value=r.notes||''; form.dataset.editId=r.id; }
+    if(dialog.showModal) dialog.showModal(); else dialog.setAttribute('open','');
+  }
+
+  function showToast(t){ const toast=el('#toast'); toast.textContent=t; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 1400); }
+
+  function demo(){ return [{
+    id:crypto.randomUUID(), title:'바닐라 빈 푸딩',
+    summary:'심플하지만 품격 있는 기본 푸딩. 마다가스카르 바닐라의 향이 포인트.',
+    difficulty:'초급', time:35, yield:'4인분', tags:['기본','푸딩','프랑스'], image:'',
+    ingredients:['우유 500ml','생크림 200ml','설탕 70g','달걀 3개','바닐라 빈 1/2개','소금 한 꼬집'],
+    steps:['오븐 150°C 예열','우유+크림+바닐라 데워 향 우려내기','달걀+설탕 섞기','따뜻한 우유 혼합물 조금씩 넣어 섞기','체에 걸러 중탕으로 30분 굽기','식혀서 냉장'],
+    notes:'설탕 일부를 흑설탕으로 바꾸면 풍미 업.', createdAt:Date.now(), updatedAt:Date.now()
+  }]; }
+
+  updateTags(); render();
+})();
+</script>
+</body>
+</html>
