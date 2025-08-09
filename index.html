@@ -12,14 +12,11 @@
 </head>
 <body>
   <header>
-    <h1>🍰 꿈빛파티시엘노트</h1>
-    <div class="actions">
+    <h1>꿈빛파티시엘노트</h1>
+    <div class="actions actions--grid">
       <button id="newRecipeBtn">+ 새 레시피</button>
-      <button id="exportBtn">내보내기(JSON)</button>
-      <label class="importLabel">
-        불러오기(JSON)
-        <input type="file" id="importInput" accept="application/json">
-      </label>
+      <button id="exportBtn">내보내기</button>
+      <label class="importLabel">불러오기<input type="file" id="importInput" accept="application/json"></label>
     </div>
   </header>
 
@@ -36,6 +33,7 @@
 
   <main>
     <ul id="recipeList" class="cards"></ul>
+    <button id="aiFab" title="AI 도우미">AI</button>
   </main>
 
   <dialog id="recipeDialog">
@@ -47,28 +45,16 @@
         <label>난이도
           <select name="difficulty">
             <option value="">선택 없음</option>
-            <option>초급</option>
-            <option>중급</option>
-            <option>고급</option>
+            <option>초급</option><option>중급</option><option>고급</option>
           </select>
         </label>
-        <label>소요시간(분)
-          <input name="time" type="number" min="0" step="1" placeholder="예: 90">
-        </label>
-        <label>분량(인분/개수)
-          <input name="yield" maxlength="40" placeholder="예: 8인분">
-        </label>
-        <label>태그(쉼표로 구분)
-          <input name="tags" maxlength="120" placeholder="예: 프랑스, 구움과자, 한식요소">
-        </label>
-        <label>표지 이미지 URL
-          <input name="image" placeholder="https:// ... (선택)">
-        </label>
+        <label>소요시간(분)<input name="time" type="number" min="0" step="1" placeholder="예: 90"></label>
+        <label>분량(인분/개수)<input name="yield" maxlength="40" placeholder="예: 8인분"></label>
+        <label>태그(쉼표로 구분)<input name="tags" maxlength="120" placeholder="예: 프랑스, 구움과자, 한식요소"></label>
+        <label>표지 이미지 URL<input name="image" placeholder="https:// ... (선택)"></label>
       </div>
 
-      <label>한 줄 소개
-        <input name="summary" maxlength="160" placeholder="예: 말차-화이트초콜릿 조합의 진한 레이어 케이크">
-      </label>
+      <label>한 줄 소개<input name="summary" maxlength="160" placeholder="예: 말차-화이트초콜릿 조합의 진한 레이어 케이크"></label>
 
       <label>재료(한 줄당 하나)
         <textarea name="ingredients" rows="8" placeholder="버터 100g
@@ -133,12 +119,31 @@
     <small>저장 위치: 이 브라우저의 localStorage · 데이터는 내 기기에서만 보입니다 · JSON으로 백업하세요</small>
   </footer>
 
+  <dialog id="aiDialog">
+    <form method="dialog" id="aiForm">
+      <h2>AI 도우미 <small class="muted">(데모)</small></h2>
+      <p class="muted">재료로 레시피 추천, 단계 요약, 단위 변환 등을 물어보세요. (API 연결 전에는 예시 응답을 보여줘요)</p>
+      <textarea id="aiInput" rows="4" placeholder="예: 말차·우유·달걀로 간단한 디저트 추천"></textarea>
+      <menu>
+        <button value="cancel">닫기</button>
+        <button id="aiAskBtn" value="default">질문 보내기</button>
+      </menu>
+      <div id="aiResult" class="ai-result"></div>
+      <hr>
+      <details>
+        <summary>설정: API 키 연결 (선택)</summary>
+        <label>OpenAI API Key
+          <input type="password" id="apiKeyInput" placeholder="sk-...">
+        </label>
+        <button type="button" id="saveKeyBtn">키 저장</button>
+      </details>
+    </form>
+  </dialog>
+
   <script src="app.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js");
-      });
+      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
     }
   </script>
 </body>

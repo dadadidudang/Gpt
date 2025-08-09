@@ -1,8 +1,7 @@
 
 (() => {
   const el = sel => document.querySelector(sel);
-  const els = sel => Array.from(document.querySelectorAll(sel));
-  const storageKey = 'dessertRecipes.v1';
+  const storageKey = 'gppn.recipes.v1';
 
   let state = {
     recipes: load(),
@@ -23,12 +22,55 @@
   const importInput = el('#importInput');
   const dialogTitle = el('#dialogTitle');
 
+  const aiDialog = el('#aiDialog');
+  const aiFab = el('#aiFab');
+  const aiInput = document.getElementById('aiInput');
+  const aiResult = document.getElementById('aiResult');
+  const aiAskBtn = document.getElementById('aiAskBtn');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const saveKeyBtn = document.getElementById('saveKeyBtn');
+
   // Event bindings
   newBtn.addEventListener('click', () => openForm());
   exportBtn.addEventListener('click', exportJSON);
   importInput.addEventListener('change', importJSON);
   searchInput.addEventListener('input', e => { state.search = e.target.value.trim(); render(); });
   sortSelect.addEventListener('change', e => { state.sort = e.target.value; render(); });
+
+  el('#cancelBtn').addEventListener('click', () => {
+    if (typeof dialog.close === 'function') { dialog.close(); }
+    else { dialog.removeAttribute('open'); document.body.style.overflow=''; }
+  });
+
+  aiFab.addEventListener('click', () => {
+    if (typeof aiDialog.showModal === 'function') aiDialog.showModal();
+    else aiDialog.setAttribute('open','');
+    const saved = localStorage.getItem('gppn.apiKey') || '';
+    if (saved) apiKeyInput.value = saved;
+  });
+
+  aiAskBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    const q = (aiInput?.value || '').trim();
+    if (!q) return;
+    const key = localStorage.getItem('gppn.apiKey');
+    const header = key ? "🔐 API 키가 설정되어 있어요. 실제 연결만 하면 됩니다.\n\n"
+                       : "🧪 데모 응답(키 미설정). 설정에서 API 키를 넣으면 실제 호출로 바꿀 수 있어요.\n\n";
+    const demo = [
+      "• 재료 분석: '말차, 우유, 달걀' → 말차 푸딩/말차 크림브륄레 추천",
+      "• 단위 변환: 설탕 3 Tbsp ≈ 37~40 g",
+      "• 시간 스케줄: 굽기 20분 + 휴지 10분 → 총 30분",
+      "• 대체 재료: 버터→식물성 마가린(풍미↓), 우유→두유(수분 조절 필요)"
+    ].join("\n");
+    aiResult.textContent = header + demo;
+  });
+
+  saveKeyBtn?.addEventListener('click', () => {
+    const v = apiKeyInput?.value?.trim();
+    if (!v) { alert('키를 입력해주세요'); return; }
+    localStorage.setItem('gppn.apiKey', v);
+    alert('API 키 저장 완료! 이제 실제 AI 호출을 붙일 수 있어요.');
+  });
 
   form.addEventListener('submit', e => {
     e.preventDefault();
@@ -49,11 +91,9 @@
       state.recipes.unshift(data);
     }
     save();
-    dialog.close();
+    if (typeof dialog.close === 'function') dialog.close(); else dialog.removeAttribute('open');
     render();
   });
-
-  el('#cancelBtn').addEventListener('click', () => { if (typeof dialog.close === 'function') { dialog.close(); } else { dialog.removeAttribute('open'); document.body.style.overflow=''; } });
 
   function openForm(recipe=null) {
     form.reset();
@@ -73,7 +113,8 @@
       form.notes.value = recipe.notes || '';
       form.dataset.editId = recipe.id;
     }
-    if (typeof dialog.showModal === 'function') { dialog.showModal(); } else { dialog.setAttribute('open',''); document.body.style.overflow='hidden'; }
+    if (typeof dialog.showModal === 'function') { dialog.showModal(); }
+    else { dialog.setAttribute('open',''); document.body.style.overflow='hidden'; }
   }
 
   function formToRecipe(fd) {
@@ -130,8 +171,7 @@
     reader.onload = () => {
       try {
         const arr = JSON.parse(reader.result);
-        if (!Array.isArray(arr)) throw new Error('Invalid JSON format');
-        // merge by title if id missing
+        if (!Array.isArray(arr)) throw new Error('Invalid JSON');
         const map = new Map(state.recipes.map(r => [r.id, r]));
         for (const r of arr) {
           if (r.id && map.has(r.id)) continue;
@@ -147,7 +187,6 @@
       }
     };
     reader.readAsText(file);
-    // reset input to allow re-importing same file
     e.target.value = '';
   }
 
@@ -170,46 +209,45 @@
         case 'titleAsc': return (a.title||'').localeCompare(b.title||'');
         case 'timeAsc': return (a.time||1e12) - (b.time||1e12);
         case 'timeDesc': return (b.time||-1) - (a.time||-1);
-        default: // updatedDesc
-          return (b.updatedAt||0) - (a.updatedAt||0);
+        default: return (b.updatedAt||0) - (a.updatedAt||0);
       }
     });
 
-    list.innerHTML = '';
+    const main = document.querySelector('main');
+    const old = document.getElementById('recipeList');
+    if (old) old.remove();
+    const ul = document.createElement('ul');
+    ul.id = 'recipeList';
+    ul.className = 'cards';
+    main.insertBefore(ul, document.getElementById('aiFab'));
+
     if (!filtered.length) {
       const div = document.createElement('div');
       div.className = 'empty';
-      div.textContent = '레시피가 없어요. 오른쪽 위에서 새 레시피를 추가해보세요!';
-      list.replaceWith(list.cloneNode(true));
-      el('main').innerHTML = '';
-      el('main').appendChild(div);
+      div.textContent = '레시피가 없어요. 위에서 새 레시피를 추가해보세요!';
+      main.insertBefore(div, document.getElementById('aiFab'));
       return;
     }
-    el('main').innerHTML = '';
-    const ul = document.createElement('ul'); ul.id='recipeList'; ul.className='cards';
-    el('main').appendChild(ul);
 
-    for (const r of filtered) {
-      ul.appendChild(renderCard(r));
-    }
+    for (const r of filtered) ul.appendChild(renderCard(r));
   }
 
   function renderCard(r) {
-    const tmpl = el('#recipeCardTmpl').content.cloneNode(true);
-    const li = tmpl.querySelector('.card');
-    const thumb = tmpl.querySelector('.thumb');
-    const title = tmpl.querySelector('.title');
-    const summary = tmpl.querySelector('.summary');
-    const time = tmpl.querySelector('.time');
-    const diff = tmpl.querySelector('.diff');
-    const yieldEl = tmpl.querySelector('.yield');
-    const tags = tmpl.querySelector('.tags');
-    const ing = tmpl.querySelector('.ing');
-    const steps = tmpl.querySelector('.steps');
-    const notes = tmpl.querySelector('.notes');
-    const editBtn = tmpl.querySelector('.edit');
-    const delBtn = tmpl.querySelector('.delete');
-    const dupBtn = tmpl.querySelector('.dup');
+    const tpl = document.querySelector('#recipeCardTmpl').content.cloneNode(true);
+    const li = tpl.querySelector('.card');
+    const thumb = tpl.querySelector('.thumb');
+    const title = tpl.querySelector('.title');
+    const summary = tpl.querySelector('.summary');
+    const time = tpl.querySelector('.time');
+    const diff = tpl.querySelector('.diff');
+    const yieldEl = tpl.querySelector('.yield');
+    const tags = tpl.querySelector('.tags');
+    const ing = tpl.querySelector('.ing');
+    const steps = tpl.querySelector('.steps');
+    const notes = tpl.querySelector('.notes');
+    const editBtn = tpl.querySelector('.edit');
+    const delBtn = tpl.querySelector('.delete');
+    const dupBtn = tpl.querySelector('.dup');
 
     title.textContent = r.title || '(제목 없음)';
     summary.textContent = r.summary || '';
@@ -220,16 +258,21 @@
 
     (r.tags||[]).forEach(t => {
       const s = document.createElement('span');
-      s.className = 'tag'; s.textContent = `#${t}`;
+      s.className = 'tag';
+      s.textContent = `#${t}`;
       s.addEventListener('click', () => { state.tagFilter = t; updateTags(); render(); });
       tags.appendChild(s);
     });
 
     (r.ingredients||[]).forEach(i => {
-      const li = document.createElement('li'); li.textContent = i; ing.appendChild(li);
+      const li = document.createElement('li');
+      li.textContent = i;
+      ing.appendChild(li);
     });
     (r.steps||[]).forEach(s => {
-      const li = document.createElement('li'); li.textContent = s; steps.appendChild(li);
+      const li = document.createElement('li');
+      li.textContent = s;
+      steps.appendChild(li);
     });
     notes.textContent = r.notes || '';
 
@@ -237,7 +280,8 @@
     delBtn.addEventListener('click', () => {
       if (confirm('이 레시피를 삭제할까요?')) {
         state.recipes = state.recipes.filter(x => x.id !== r.id);
-        save(); render();
+        save();
+        render();
       }
     });
     dupBtn.addEventListener('click', () => {
@@ -247,7 +291,8 @@
       copy.createdAt = Date.now();
       copy.updatedAt = Date.now();
       state.recipes.unshift(copy);
-      save(); render();
+      save();
+      render();
     });
 
     return li;
@@ -281,10 +326,10 @@
       time: 35,
       yield: '4인분',
       tags: ['기본', '푸딩', '프랑스'],
-      image: 'https://images.unsplash.com/photo-1517677208171-0bc6725a3e60?q=80&w=1200&auto=format&fit=crop',
+      image: '',
       ingredients: ['우유 500ml', '생크림 200ml', '설탕 70g', '달걀 3개', '바닐라 빈 1/2개', '소금 한 꼬집'],
-      steps: ['오븐 150°C 예열', '우유+크림+바닐라를 데워 향을 우려낸다', '달걀+설탕+소금 섞기', '따뜻한 우유 혼합물을 조금씩 넣어 섞기', '체에 걸러 램킨에 붓고 중탕으로 30분 굽기', '식혀서 냉장'],
-      notes: '설탕 일부를 흑설탕으로 바꾸면 풍미 업.' ,
+      steps: ['오븐 150°C 예열', '우유+크림+바닐라를 데워 향을 우려내기', '달걀+설탕+소금 섞기', '따뜻한 우유 혼합물을 조금씩 넣어 섞기', '체에 걸러 램킨에 붓고 중탕으로 30분 굽기', '식혀서 냉장'],
+      notes: '설탕 일부를 흑설탕으로 바꾸면 풍미 업.',
       createdAt: Date.now(),
       updatedAt: Date.now()
     }];

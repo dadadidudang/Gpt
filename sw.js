@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'dessert-recipes-v1';
+const CACHE_NAME = 'gppn-polished-v1';
 const APP_SHELL = [
   './',
   './index.html',
@@ -14,50 +14,43 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => {
-      if (k !== CACHE_NAME) return caches.delete(k);
-    })))
+    caches.keys().then(keys => Promise.all(keys.map(k => k !== CACHE_NAME && caches.delete(k))))
   );
   self.clients.claim();
 });
 
-// Cache-first for app shell, network-first for images
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
+  // Cache-first for app shell
   if (APP_SHELL.some(path => url.pathname.endsWith(path.replace('./','/')))) {
-    event.respondWith(
-      caches.match(req).then(resp => resp || fetch(req))
-    );
+    event.respondWith(caches.match(req).then(resp => resp || fetch(req)));
     return;
   }
 
+  // Images: try cache, then network, then fallback to cache
   if (req.destination === 'image') {
     event.respondWith(
       caches.match(req).then(resp => {
         const fetchPromise = fetch(req).then(networkResp => {
           caches.open(CACHE_NAME).then(cache => cache.put(req, networkResp.clone()));
           return networkResp;
-        }).catch(()=>resp);
+        }).catch(() => resp);
         return resp || fetchPromise;
       })
     );
     return;
   }
 
-  // Default: try network then cache
+  // Default: network first, fallback to cache
   event.respondWith(
-    fetch(req).then(resp => {
-      return resp;
-    }).catch(() => caches.match(req))
+    fetch(req).then(resp => resp).catch(() => caches.match(req))
   );
 });
